@@ -116,12 +116,11 @@ void schedule(void)
 				}
 			if (((*p)->signal & ~(_BLOCKABLE & (*p)->blocked)) &&
 			(*p)->state==TASK_INTERRUPTIBLE)
-			{
-				(*p)->state=TASK_RUNNING;
-				/** 输出就绪log **/
-				fprintk(3,"%ld\t%c\t%ld",(*p)->pid,'J',jiffies);
-			}
-			
+				{
+					(*p)->state=TASK_RUNNING;
+					/*可中断睡眠 => 就绪*/
+					fprintk(3,"%d\tJ\t%d\n",(*p)->pid,jiffies);
+				}
 		}
 
 /* this is the scheduler proper: */
@@ -143,25 +142,25 @@ void schedule(void)
 				(*p)->counter = ((*p)->counter >> 1) +
 						(*p)->priority;
 	}
-	/**输出就绪的log**/
-	if(current->state == TASK_RUNNING && current != task[next]){
-		fprintk(3,"%ld\t%c\t%ld",current->pid,'J',jiffies);
+	/*编号为next的进程 运行*/
+	if(current->pid != task[next] ->pid)
+	{
+		/*时间片到时程序 => 就绪*/
+		if(current->state == TASK_RUNNING)
+			fprintk(3,"%d\tJ\t%d\n",current->pid,jiffies);
+		fprintk(3,"%d\tR\t%d\n",task[next]->pid,jiffies);
 	}
-	/**输出可运行的log**/
-	if(current != task[next]){
-		fprintk(3,"%ld\t%c\t%ld",task[next]->pid,'R',jiffies);
-	}
-
 	switch_to(next);
 }
 
 int sys_pause(void)
 {
 	current->state = TASK_INTERRUPTIBLE;
-	/** 输出等待的log */
-	if(current->pid != 0){
-		fprintk(3,"%ld\t%c\t%ld",current->pid,'W',jiffies);
-	}
+	/*
+	*当前进程  运行 => 可中断睡眠
+	*/
+	if(current->pid != 0)
+		fprintk(3,"%d\tW\t%d\n",current->pid,jiffies);
 	schedule();
 	return 0;
 }
@@ -177,18 +176,18 @@ void sleep_on(struct task_struct **p)
 	tmp = *p;
 	*p = current;
 	current->state = TASK_UNINTERRUPTIBLE;
-		
-	/**检查并输出等待的log**/
-	if(current->pid !=0){
-		fprintk(3,"%ld\t%c\t%ld",current->pid,'W',jiffies);
-	}
-
+	/*
+	*当前进程进程 => 不可中断睡眠
+	*/
+	fprintk(3,"%d\tW\t%d\n",current->pid,jiffies);
 	schedule();
 	if (tmp)
 	{
 		tmp->state=0;
-		/*原来的等待队列，第一个进程被唤醒(就绪) */
-		fprintk(3,"%ld\t%c\t%ld",tmp->pid,'J',jiffies);
+		/*
+		*原等待队列 第一个进程 => 唤醒（就绪）
+		*/
+		fprintk(3,"%d\tJ\t%d\n",tmp->pid,jiffies);
 	}
 }
 
@@ -203,20 +202,27 @@ void interruptible_sleep_on(struct task_struct **p)
 	tmp=*p;
 	*p=current;
 repeat:	current->state = TASK_INTERRUPTIBLE;
-	/* 这一部分属于唤醒队列中间进程，通过goto实现唤醒，队列头进程 过程中wait */
-	fprintk(3,"%ld\t%c\t%ld",current->pid,'W',jiffies);
-
-
+	/*
+	*这一部分属于 唤醒队列中间进程，通过goto实现唤醒 队列头进程 过程中Wait
+	*/
+	fprintk(3,"%d\tW\t%d\n",current->pid,jiffies);
 	schedule();
 	if (*p && *p != current) {
 		(**p).state=0;
+		/*
+		*当前进程进程 => 可中断睡眠 同上
+		*/
+		fprintk(3,"%d\tJ\t%d\n",(*p)->pid,jiffies);
 		goto repeat;
 	}
 	*p=NULL;
-	if (tmp){
+	if (tmp)
+	{
 		tmp->state=0;
-		/*原来的等待队列 第一个进程被唤醒*/
-		fprintk(3,"%ld\t%c\t%ld",tmp->pid,'J',jiffies);
+		/*
+		*原等待队列 第一个进程 => 唤醒（就绪）
+		*/
+		fprintk(3,"%d\tJ\t%d\n",tmp->pid,jiffies);
 	}
 }
 
@@ -224,8 +230,10 @@ void wake_up(struct task_struct **p)
 {
 	if (p && *p) {
 		(**p).state=0;
-		/**唤醒 最后进入等待序列的进程*/
-		fprintk(3,"%ld\t%c\t%ld",(*p)->pid,'J',jiffies);
+		/*
+		*唤醒 最后进入等待序列的 进程
+		*/
+		fprintk(3,"%d\tJ\t%d\n",(*p)->pid,jiffies);
 		*p=NULL;
 	}
 }

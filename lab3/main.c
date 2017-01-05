@@ -101,6 +101,10 @@ static long main_memory_start = 0;
 
 struct drive_info { char dummy[32]; } drive_info;
 
+/*
+* 打开/var/process.log 文件
+* 2014-10-14  corrected by carpela (carpela@163.com) HIT name：文豪
+*/
 void main(void)		/* This really IS void, no error here. */
 {			/* The startup routine assumes (well, ...) this */
 /*
@@ -135,16 +139,16 @@ void main(void)		/* This really IS void, no error here. */
 	floppy_init();
 	sti();
 	move_to_user_mode();
-	/*****添加开始*********/
-	
-	setup((void*) &drive_info);
-	(void) open("dev/tyy0",O_RDWR_0); //建立文件描述符0和/dev/tty的关联
-	(void) dup(0);		//	文件描述符1和/dev/tty0关联
-	(void) dup(0);		//	文件描述符2和/dev/tty0关联
+	/*
+	*main中打开process.log文件
+	*/
+	setup((void *) &drive_info);
+	(void) open("/dev/tty0",O_RDWR,0);
+	(void) dup(0);
+	(void) dup(0);
 	(void) open("/var/process.log",O_CREAT|O_TRUNC|O_WRONLY,0666);
-
-	/******添加结束********/
-
+	/*open dup返回的一定是未使用的最小的描述符数值 参见《UNIX环境高级编程》(第三版) P51*/
+	/*添加结束*/
 	if (!fork()) {		/* we count on this going ok */
 		init();
 	}
@@ -162,7 +166,6 @@ static int printf(const char *fmt, ...)
 {
 	va_list args;
 	int i;
-
 	va_start(args, fmt);
 	write(1,printbuf,i=vsprintf(printbuf, fmt, args));
 	va_end(args);
@@ -178,11 +181,6 @@ static char * envp[] = { "HOME=/usr/root", NULL };
 void init(void)
 {
 	int pid,i;
-
-	setup((void *) &drive_info);
-	(void) open("/dev/tty0",O_RDWR,0);
-	(void) dup(0);
-	(void) dup(0);
 	printf("%d buffers = %d bytes buffer space\n\r",NR_BUFFERS,
 		NR_BUFFERS*BLOCK_SIZE);
 	printf("Free mem: %d bytes\n\r",memory_end-main_memory_start);

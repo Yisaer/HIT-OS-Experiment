@@ -108,8 +108,9 @@ int do_exit(long code)
 		if (task[i] && task[i]->father == current->pid) {
 			task[i]->father = 1;
 			if (task[i]->state == TASK_ZOMBIE)
-				/* assumption task[1] is always init */
-				(void) send_sig(SIGCHLD, task[1], 1);
+				{/* assumption task[1] is always init */
+					(void) send_sig(SIGCHLD, task[1], 1);
+				}
 		}
 	for (i=0 ; i<NR_OPEN ; i++)
 		if (current->filp[i])
@@ -127,6 +128,10 @@ int do_exit(long code)
 	if (current->leader)
 		kill_session();
 	current->state = TASK_ZOMBIE;
+	/*
+	*退出一个进程
+	*/
+	fprintk(3,"%d\tE\t%d\n",current->pid,jiffies);
 	current->exit_code = code;
 	tell_father(current->father);
 	schedule();
@@ -172,12 +177,6 @@ repeat:
 				current->cstime += (*p)->stime;
 				flag = (*p)->pid;
 				code = (*p)->exit_code;
-
-				/* 输出一条进程退出的log */
-				/* TASK_STOPED状态只是将进程转入睡眠状态，收到SIG_CONT信号时会被唤醒	*/
-				/* TASK_ZOMBIE状态则是将当前进程被KILL 并发送信号给父进程*/
-				fprintk(3,"%ld\t%c\t%ld\n",flag,'E',jiffies);
-
 				release(*p);
 				put_fs_long(code,stat_addr);
 				return flag;
@@ -190,13 +189,10 @@ repeat:
 		if (options & WNOHANG)
 			return 0;
 		current->state=TASK_INTERRUPTIBLE;
-		/* 这里输出一条等待的log */
-		/* 输出wait的时候要判断一下，pid是不是等于0，如果等于0则不输出*/
-		/* 0号进程时守护进程，cpu空闲的 时候一直在waiting*/
-		if (current->pid !=0){
-			fprintk(3,"%ld\t%c\t%ld\n",current->pid,'W',jiffies);
-		}
-
+		/*
+		*当前进程 => 等待
+		*/
+		fprintk(3,"%d\tW\t%d\n",current->pid,jiffies);
 		schedule();
 		if (!(current->signal &= ~(1<<(SIGCHLD-1))))
 			goto repeat;
